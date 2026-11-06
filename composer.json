@@ -1,0 +1,23 @@
+{
+  "name": "cossette-numerique/craft-project-assistant",
+  "description": "Read-only AI assistant in the Craft control panel that answers questions about the project's content, structure and code, and hands off to a ticket system when the CMS can't do what's asked.",
+  "type": "craft-plugin",
+  "version": "1.0.0-beta.1",
+  "license": "proprietary",
+  "require": {
+    "php": "^8.2",
+    "craftcms/cms": "^5.0",
+    "anthropic-ai/sdk": "^1.6"
+  },
+  "autoload": {
+    "psr-4": {
+      "cossette\\projectassistant\\": "src/"
+    }
+  },
+  "extra": {
+    "handle": "project-assistant",
+    "name": "Project Assistant",
+    "developer": "Cossette",
+    "class": "cossette\\projectassistant\\Plugin"
+  }
+}

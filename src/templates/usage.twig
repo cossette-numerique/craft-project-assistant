@@ -1,0 +1,97 @@
+{% extends '_layouts/cp' %}
+{% set title = 'Usage'|t('project-assistant') %}
+{% set selectedSubnavItem = 'usage' %}
+{% set crumbs = [{label: assistantName, url: cpUrl('project-assistant')}] %}
+
+{% macro usd(value) %}{{ '$' ~ value|number_format(2) }}{% endmacro %}
+
+{% block content %}
+    <div class="pa-usage">
+        <section class="pa-cards">
+            <div class="pa-card">
+                <div class="pa-card__label">{{ 'Spent this month (estimate)'|t('project-assistant') }}</div>
+                <div class="pa-card__value">{{ _self.usd(spent) }}</div>
+                {% if settings.monthlyBudget > 0 %}
+                    <div class="pa-card__meta">{{ 'of {budget} monthly budget'|t('project-assistant', {budget: _self.usd(settings.monthlyBudget)}) }}</div>
+                    <div class="pa-meter" role="img" aria-label="{{ (spent / settings.monthlyBudget * 100)|round }}%"><span style="width: {{ min(100, spent / settings.monthlyBudget * 100) }}%"></span></div>
+                {% endif %}
+            </div>
+            <div class="pa-card">
+                <div class="pa-card__label">{{ 'Model'|t('project-assistant') }}</div>
+                <div class="pa-card__value pa-card__value--small"><code>{{ settings.model }}</code></div>
+                <div class="pa-card__meta">{{ 'Effort: {effort}'|t('project-assistant', {effort: settings.effort}) }}{% if settings.userMonthlyBudget > 0 %} · {{ 'Per-user budget: {budget}/month'|t('project-assistant', {budget: _self.usd(settings.userMonthlyBudget)}) }}{% endif %}</div>
+            </div>
+            <div class="pa-card">
+                <div class="pa-card__label">{{ 'Ticket system'|t('project-assistant') }}</div>
+                <div class="pa-card__value pa-card__value--small">{{ provider.name }}</div>
+                <div class="pa-card__meta">{{ provider.connected ? 'Connected'|t('project-assistant') : 'Not connected: tickets are saved in the CMS only'|t('project-assistant') }}</div>
+            </div>
+        </section>
+        <p class="light">{{ 'Costs are estimates from token usage and the price table in the plugin settings. The provider’s invoice is authoritative.'|t('project-assistant') }}</p>
+
+        <h2>{{ 'By month'|t('project-assistant') }}</h2>
+        {% if report|length %}
+            <table class="data fullwidth">
+                <thead>
+                    <tr>
+                        <th scope="col">{{ 'Month'|t('project-assistant') }}</th>
+                        <th scope="col">{{ 'User'|t('project-assistant') }}</th>
+                        <th scope="col">{{ 'Questions'|t('project-assistant') }}</th>
+                        <th scope="col">{{ 'Conversations'|t('project-assistant') }}</th>
+                        <th scope="col">{{ 'Model calls'|t('project-assistant') }}</th>
+                        <th scope="col">{{ 'Tokens (in / cached / out)'|t('project-assistant') }}</th>
+                        <th scope="col">{{ 'Cost'|t('project-assistant') }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for month, data in report %}
+                        {% for row in data.users %}
+                            <tr>
+                                <td>{% if loop.first %}<strong>{{ month }}</strong><br><span class="light">{{ _self.usd(data.costUsd) }} · {{ '{n} questions'|t('project-assistant', {n: data.questions}) }}</span>{% endif %}</td>
+                                <td>{{ row.user ? row.user.friendlyName : ('Deleted user'|t('project-assistant')) }}</td>
+                                <td>{{ row.questions }}</td>
+                                <td>{{ row.conversations }}</td>
+                                <td>{{ row.calls }}</td>
+                                <td>{{ (row.inputTokens + row.cacheWriteTokens)|number }} / {{ row.cacheReadTokens|number }} / {{ row.outputTokens|number }}</td>
+                                <td>{{ _self.usd(row.costUsd) }}</td>
+                            </tr>
+                        {% endfor %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p class="light">{{ 'No usage yet.'|t('project-assistant') }}</p>
+        {% endif %}
+
+        <h2>{{ 'Recent conversations'|t('project-assistant') }}</h2>
+        {% if conversations|length %}
+            <table class="data fullwidth">
+                <thead>
+                    <tr>
+                        <th scope="col">{{ 'Conversation'|t('project-assistant') }}</th>
+                        <th scope="col">{{ 'User'|t('project-assistant') }}</th>
+                        <th scope="col">{{ 'Ticket'|t('project-assistant') }}</th>
+                        <th scope="col">{{ 'Cost'|t('project-assistant') }}</th>
+                        <th scope="col">{{ 'Last activity'|t('project-assistant') }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for c in conversations %}
+                        {% set u = users[c.userId] ?? null %}
+                        <tr>
+                            <td><a href="{{ cpUrl('project-assistant/c/' ~ c.id) }}">{{ c.title ?: ('Conversation'|t('project-assistant')) }}</a></td>
+                            <td>{{ u ? u.friendlyName : '—' }}</td>
+                            <td>{% if c.ticketReference %}<span class="pa-badge">{{ c.ticketReference }}</span>{% else %}—{% endif %}</td>
+                            <td>{{ _self.usd(c.costUsd) }}</td>
+                            <td>{{ c.updatedAt|datetime('short') }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p class="light">{{ 'No conversations yet.'|t('project-assistant') }}</p>
+        {% endif %}
+    </div>
+{% endblock %}
+
+{% do view.registerAssetBundle('cossette\\projectassistant\\web\\assets\\chat\\ChatAsset') %}
