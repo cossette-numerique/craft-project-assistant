@@ -8,7 +8,7 @@ When the CMS can't do what they need, the assistant drafts a ticket for the deve
 - Claude through the Anthropic API ([`anthropic-ai/sdk`](https://github.com/anthropics/anthropic-sdk-php))
 - No extra service to run: everything runs inside Craft
 
-> **Status:** this plugin lives in `vital-craft/plugins/craft-project-assistant` until it gets its own repository. It's built to be reused across projects: nothing in `src/` is specific to Vital.
+> **Status:** beta. Extracted from `vital-craft`, where it was first built. It's built to be reused across projects: nothing in `src/` is specific to Vital.
 
 ## What it can and can't do
 
@@ -47,13 +47,15 @@ composer require cossette-numerique/craft-project-assistant
 php craft plugin/install project-assistant
 ```
 
-Until the plugin has its own repository, a project can use it through a Composer `path` repository (that's how Vital does it):
+The package isn't on Packagist, so add this repository to the project's `composer.json` first (the project needs read access to this private repo):
 
 ```jsonc
 "repositories": [
-  { "type": "path", "url": "plugins/craft-project-assistant", "options": { "symlink": true } }
+  { "type": "vcs", "url": "git@github.com:cossette-numerique/craft-project-assistant.git" }
 ]
 ```
+
+While it's in beta, require it with `composer require cossette-numerique/craft-project-assistant:^1.0@beta`.
 
 Then:
 
