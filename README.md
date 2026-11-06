@@ -47,11 +47,11 @@ composer require cossette-numerique/craft-project-assistant
 php craft plugin/install project-assistant
 ```
 
-The package isn't on Packagist, so add this repository to the project's `composer.json` first (the project needs read access to this private repo):
+The package isn't on Packagist, so add this repository to the project's `composer.json` first (the project needs read access to this private repo: locally your GitHub login is enough, servers need a token in `COMPOSER_AUTH`):
 
 ```jsonc
 "repositories": [
-  { "type": "vcs", "url": "git@github.com:cossette-numerique/craft-project-assistant.git" }
+  { "type": "vcs", "url": "https://github.com/cossette-numerique/craft-project-assistant.git" }
 ]
 ```
 
