@@ -216,77 +216,378 @@
   border-color: var(--hairline-color, #e3e5e8);
 }
 
-/* Ticket card */
+/*
+ * Ticket card, in the Cossette client portal style: ink and grey palette, Inter (when it is
+ * installed locally, no web font is loaded), a soft colour field on top, pill buttons.
+ * Every rule is scoped to `.pa-ticket`, so the rest of the chat and the CP keep their look.
+ * Tokens are declared with zero specificity: a project can override any of them with a
+ * plain `.pa-ticket { --pa-ticket-accent: …; }` in its own CP CSS.
+ */
+:where(.pa-ticket) {
+  --pa-ticket-font: Inter, 'Inter Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+  --pa-ticket-text: #232625;
+  --pa-ticket-text-2: #3f4342;
+  --pa-ticket-text-3: #646968;
+  --pa-ticket-surface: #ffffff;
+  --pa-ticket-raised: #f7f8f7;
+  --pa-ticket-hover: #eef0ee;
+  --pa-ticket-active: #e6e9e6;
+  --pa-ticket-border: #e4e6e5;
+  --pa-ticket-rule: #eceeec;
+  --pa-ticket-control: #d3d7d5;
+  --pa-ticket-accent: #262626;
+  --pa-ticket-accent-hover: #3f3f3f;
+  --pa-ticket-accent-active: #111213;
+  --pa-ticket-on-accent: #ffffff;
+  --pa-ticket-ok: #24704d;
+  --pa-ticket-ok-bg: #e2f2e9;
+  --pa-ticket-warn: #8a5a12;
+  --pa-ticket-warn-bg: #fbe9c9;
+  --pa-ticket-warn-soft: #fdf4e3;
+  --pa-ticket-radius: 20px;
+  --pa-ticket-radius-control: 12px;
+  --pa-ticket-shadow: 0 0 0 1px var(--pa-ticket-border), 0 8px 30px rgb(40 20 60 / 0.08);
+  --pa-ticket-cover-height: 76px;
+  /* Colour field ("green" palette of the Cossette UI kit). */
+  --pa-ticket-g-base: #eef3dc;
+  --pa-ticket-g-start: #e6da6e;
+  --pa-ticket-g-mid: #84cf8e;
+  --pa-ticket-g-end: #2e9e8f;
+  --pa-ticket-ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
 .pa-ticket {
-  border: 1px solid var(--hairline-color, #cdd8e4);
-  border-left: 4px solid var(--link-color, #0b69a3);
-  border-radius: 8px;
-  padding: 14px 16px;
-  background: var(--white, #fff);
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  padding: calc(var(--pa-ticket-cover-height) + 18px) 20px 20px;
+  border-radius: var(--pa-ticket-radius);
+  background: var(--pa-ticket-surface);
+  box-shadow: var(--pa-ticket-shadow);
+  color: var(--pa-ticket-text);
+  font-family: var(--pa-ticket-font);
+  font-size: 14px;
+  line-height: 20px;
+  font-feature-settings: 'cv11', 'ss01';
+  -webkit-font-smoothing: antialiased;
+  /* Craft reads these for `.light` and buttons; scoped here, the CP keeps its own. */
+  --medium-text-color: var(--pa-ticket-text-3);
+  --light-text-color: var(--pa-ticket-text-3);
 }
-.pa-ticket--submitted { border-left-color: var(--success-color, #0c7c48); }
-.pa-ticket--dismissed { border-left-color: var(--hairline-color, #cdd8e4); padding: 8px 16px; }
-.pa-ticket__header {
+.pa-ticket *,
+.pa-ticket *::before,
+.pa-ticket *::after { box-sizing: border-box; }
+
+/* Colour field: soft blobs over a pale base, with a light veil, like the portal covers. */
+.pa-ticket::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: var(--pa-ticket-cover-height);
+  z-index: -1;
+  background: linear-gradient(110deg, var(--pa-ticket-g-start), var(--pa-ticket-g-mid) 55%, var(--pa-ticket-g-end));
+}
+@supports (background: color-mix(in srgb, red 50%, transparent)) {
+  .pa-ticket::before {
+    background:
+      linear-gradient(rgb(0 0 0 / 0.06), rgb(0 0 0 / 0.06)),
+      radial-gradient(38% 120% at 67% 35%, color-mix(in srgb, var(--pa-ticket-g-start) 90%, transparent), transparent 70%),
+      radial-gradient(55% 140% at 52% 20%, color-mix(in srgb, var(--pa-ticket-g-start) 80%, transparent), transparent 72%),
+      radial-gradient(40% 110% at 14% 0%, color-mix(in srgb, var(--pa-ticket-g-start) 60%, transparent), transparent 70%),
+      radial-gradient(45% 120% at 45% 95%, color-mix(in srgb, var(--pa-ticket-g-mid) 60%, transparent), transparent 72%),
+      radial-gradient(42% 160% at 6% 100%, color-mix(in srgb, var(--pa-ticket-g-end) 55%, transparent), transparent 70%),
+      radial-gradient(42% 160% at 96% 100%, color-mix(in srgb, var(--pa-ticket-g-end) 50%, transparent), transparent 70%),
+      var(--pa-ticket-g-base);
+  }
+}
+
+.pa-ticket p { margin: 0; }
+
+/* Header: the provider sits on the colour field as a pill, the heading starts the card body. */
+.pa-ticket .pa-ticket__header {
   display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 12px;
-  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 4px;
 }
-.pa-ticket__header h3 { margin: 0; }
-.pa-ticket__check { color: var(--success-color, #0c7c48); }
-.pa-ticket__provider {
+.pa-ticket .pa-ticket__header h3 {
+  margin: 0;
+  font-size: 19px;
+  line-height: 25px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--pa-ticket-text);
+}
+.pa-ticket .pa-ticket__provider {
+  position: absolute;
+  z-index: 1;
+  top: calc(var(--pa-ticket-cover-height) - 12px);
+  inset-inline-start: 20px;
+  transform: translateY(-100%);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: calc(100% - 40px);
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--pa-ticket-surface);
+  color: var(--pa-ticket-text);
   font-size: 12px;
-  border-radius: 10px;
-  padding: 2px 8px;
-  background: #e6f4ec;
-  color: var(--success-color, #0c7c48);
+  line-height: 18px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.pa-ticket__provider--off {
-  background: #fff6e6;
-  color: #8a5a00;
+.pa-ticket .pa-ticket__provider::before {
+  content: '';
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--pa-ticket-ok);
 }
-.pa-ticket__warning {
-  background: #fff6e6;
-  border-radius: 6px;
-  padding: 8px 10px;
+.pa-ticket .pa-ticket__provider--off {
+  background: var(--pa-ticket-warn-bg);
+  color: var(--pa-ticket-warn);
+}
+.pa-ticket .pa-ticket__provider--off::before { background: currentColor; }
+
+.pa-ticket .pa-ticket__check {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  margin-inline-end: 8px;
+  border-radius: 50%;
+  background: var(--pa-ticket-ok-bg);
+  color: var(--pa-ticket-ok);
   font-size: 13px;
+  line-height: 1;
+  vertical-align: 2px;
 }
-.pa-ticket__form { margin-top: 10px; }
-.pa-ticket__row {
+
+.pa-ticket > p.light { font-size: 13px; line-height: 18px; }
+
+/* Draft form */
+.pa-ticket .pa-ticket__form {
+  display: grid;
+  gap: 16px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--pa-ticket-rule);
+}
+.pa-ticket .pa-ticket__row {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
 }
-.pa-field { margin-bottom: 10px; }
-.pa-field label { display: block; }
-.pa-field__label {
-  display: block;
-  font-weight: 600;
-  font-size: 13px;
-  margin-bottom: 4px;
-}
-.pa-field input[type='text'],
-.pa-field textarea,
-.pa-field select {
-  width: 100%;
-  box-sizing: border-box;
-  border: 1px solid var(--hairline-color, #cdd8e4);
-  border-radius: 5px;
-  padding: 6px 8px;
-  font: inherit;
-  background: var(--white, #fff);
-}
-.pa-field textarea { resize: vertical; line-height: 1.45; }
-.pa-ticket__actions { display: flex; gap: 8px; margin-top: 4px; }
-.pa-ticket__summary {
+.pa-ticket .pa-field { margin: 0; min-width: 0; }
+.pa-ticket .pa-field label {
   display: grid;
-  grid-template-columns: max-content 1fr;
-  gap: 4px 14px;
-  margin: 10px 0;
+  gap: 8px;
+  position: relative;
 }
-.pa-ticket__summary dt { font-weight: 600; }
-.pa-ticket__summary dd { margin: 0; }
+.pa-ticket .pa-field__label {
+  display: block;
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 500;
+  color: var(--pa-ticket-text);
+}
+.pa-ticket .pa-field__hint { margin: 6px 0 0; font-size: 13px; }
+.pa-ticket .pa-field input[type='text'],
+.pa-ticket .pa-field textarea,
+.pa-ticket .pa-field select {
+  display: block;
+  width: 100%;
+  min-height: 42px;
+  margin: 0;
+  padding: 0 14px;
+  border: 1px solid var(--pa-ticket-border);
+  border-radius: var(--pa-ticket-radius-control);
+  background: var(--pa-ticket-surface);
+  color: var(--pa-ticket-text);
+  font: inherit;
+  box-shadow: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.pa-ticket .pa-field input[type='text'] { height: 42px; }
+.pa-ticket .pa-field input[name='title'] { font-size: 15px; font-weight: 600; }
+.pa-ticket .pa-field textarea {
+  padding: 11px 14px;
+  line-height: 22px;
+  resize: vertical;
+}
+.pa-ticket .pa-field select {
+  height: 42px;
+  padding-inline-end: 36px;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+}
+/* Chevron drawn with borders (no data URI, so a strict CSP can't break it). */
+.pa-ticket .pa-ticket__row .pa-field label::after {
+  content: '';
+  position: absolute;
+  inset-inline-end: 16px;
+  bottom: 18px;
+  width: 7px;
+  height: 7px;
+  border-right: 1.6px solid var(--pa-ticket-text-3);
+  border-bottom: 1.6px solid var(--pa-ticket-text-3);
+  transform: rotate(45deg);
+  pointer-events: none;
+}
+.pa-ticket .pa-field input[type='text']:hover,
+.pa-ticket .pa-field textarea:hover,
+.pa-ticket .pa-field select:hover { border-color: var(--pa-ticket-control); }
+.pa-ticket .pa-field input[type='text']:focus,
+.pa-ticket .pa-field textarea:focus,
+.pa-ticket .pa-field select:focus {
+  outline: none;
+  border-color: var(--pa-ticket-text);
+  box-shadow: 0 0 0 1px var(--pa-ticket-text);
+}
+.pa-ticket .pa-field input[type='text']:disabled,
+.pa-ticket .pa-field textarea:disabled,
+.pa-ticket .pa-field select:disabled {
+  border-color: var(--pa-ticket-rule);
+  background: var(--pa-ticket-raised);
+  color: var(--pa-ticket-text-2);
+  cursor: default;
+  opacity: 1;
+}
+
+/* Buttons: ink pill for "Send ticket", outlined pill for "Dismiss". Craft styles `.btn`
+   through custom properties (and `!important` on `.btn.submit`), so set those here too. */
+.pa-ticket .pa-ticket__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+  --button-border-radius: 999px;
+  --button-padding: 0 16px;
+  --button-bg: var(--pa-ticket-surface);
+  --button-bg--hover: var(--pa-ticket-hover);
+  --button-bg--active: var(--pa-ticket-active);
+  --button-border: 1px solid var(--pa-ticket-border);
+  --button-border--hover: 1px solid var(--pa-ticket-border);
+  --button-border--active: 1px solid var(--pa-ticket-border);
+  --primary-button-bg: var(--pa-ticket-accent);
+  --primary-button-bg--hover: var(--pa-ticket-accent-hover);
+  --primary-button-bg--active: var(--pa-ticket-accent-active);
+  --primary-button-border: 1px solid transparent;
+  --primary-button-border--hover: 1px solid transparent;
+  --primary-button-border--active: 1px solid transparent;
+  --primary-button-text-color: var(--pa-ticket-on-accent);
+}
+.pa-ticket .pa-ticket__actions .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 16px;
+  border: 1px solid var(--pa-ticket-border);
+  border-radius: 999px;
+  background-color: var(--pa-ticket-surface);
+  color: var(--pa-ticket-text);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: background-color 0.15s var(--pa-ticket-ease), border-color 0.15s, transform 0.12s var(--pa-ticket-ease);
+}
+.pa-ticket .pa-ticket__actions .btn:not(:disabled):hover { background-color: var(--pa-ticket-hover); }
+.pa-ticket .pa-ticket__actions .btn.submit {
+  border-color: transparent;
+  background-color: var(--pa-ticket-accent);
+  color: var(--pa-ticket-on-accent);
+}
+.pa-ticket .pa-ticket__actions .btn.submit:not(:disabled):hover { background-color: var(--pa-ticket-accent-hover); }
+.pa-ticket .pa-ticket__actions .btn:not(:disabled):active { transform: scale(0.98); }
+.pa-ticket .pa-ticket__actions .btn:disabled { opacity: 0.45; cursor: default; }
+
+/* Submitted: key / value rows separated by hairlines, like the portal ticket. */
+.pa-ticket .pa-ticket__warning {
+  margin: 12px 0 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--pa-ticket-warn-soft);
+  color: var(--pa-ticket-text-2);
+  font-size: 13px;
+  line-height: 18px;
+}
+.pa-ticket .pa-ticket__summary {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  margin: 12px 0 0;
+}
+.pa-ticket .pa-ticket__summary dt,
+.pa-ticket .pa-ticket__summary dd {
+  margin: 0;
+  padding: 9px 0;
+  border-top: 1px solid var(--pa-ticket-rule);
+}
+.pa-ticket .pa-ticket__summary dt {
+  padding-inline-end: 16px;
+  color: var(--pa-ticket-text-3);
+  font-weight: 400;
+}
+.pa-ticket .pa-ticket__summary dd {
+  text-align: end;
+  overflow-wrap: anywhere;
+}
+.pa-ticket .pa-ticket__summary code {
+  padding: 0;
+  background: none;
+  font-family: inherit;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--pa-ticket-text);
+}
+.pa-ticket--submitted > p:last-child { margin-top: 16px; }
+.pa-ticket--submitted a.go {
+  display: inline-flex;
+  align-items: center;
+  height: 38px;
+  padding: 0 16px;
+  border-radius: 999px;
+  background: var(--pa-ticket-accent);
+  color: var(--pa-ticket-on-accent);
+  font-weight: 500;
+  text-decoration: none;
+  transition: background-color 0.15s var(--pa-ticket-ease);
+}
+.pa-ticket--submitted a.go:hover { background: var(--pa-ticket-accent-hover); text-decoration: none; }
+.pa-ticket--submitted a.go::after { color: inherit; }
+
+/* Dismissed: a quiet one-liner, no colour field. */
+.pa-ticket--dismissed {
+  padding: 10px 16px;
+  border-radius: 14px;
+  background: var(--pa-ticket-raised);
+  box-shadow: none;
+}
+.pa-ticket--dismissed::before { content: none; }
+.pa-ticket--dismissed p { font-size: 13px; }
+
+.pa-ticket a:focus-visible,
+.pa-ticket .pa-ticket__actions .btn:focus-visible {
+  outline: 2px solid var(--pa-ticket-text);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pa-ticket .pa-field input[type='text'],
+  .pa-ticket .pa-field textarea,
+  .pa-ticket .pa-field select,
+  .pa-ticket .pa-ticket__actions .btn,
+  .pa-ticket--submitted a.go { transition: none; }
+  .pa-ticket .pa-ticket__actions .btn:not(:disabled):active { transform: none; }
+}
 
 /* Sidebar history */
 .pa-history__heading {
@@ -364,6 +665,6 @@
 .pa-usage h2 { margin-top: 28px; }
 
 @media (max-width: 640px) {
-  .pa-ticket__row { grid-template-columns: 1fr; }
+  .pa-ticket .pa-ticket__row { grid-template-columns: 1fr; }
   .pa-msg--user .pa-msg__body { max-width: 95%; }
 }
