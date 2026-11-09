@@ -22,7 +22,7 @@ The assistant's tools are **read-only**:
 | `run_sql` | Read-only SQL on a dedicated connection (off unless configured) |
 | `propose_ticket` | Draft a ticket. Nothing is sent: the user confirms in the UI |
 
-Projects can add their own read-only tools (see [Project tools](#project-tools)). The [developer chat](#developer-chat) adds write tools for the agency's developers.
+Projects can add their own read-only tools (see [Project tools](#project-tools)). The [developer chat](#developer-chat) adds write tools for the agency's developers. An admin can also give the client chat Craft's own tools, read-only or with content editing (see [Settings page](#settings-page)); this is off by default, and the read-only guarantees below then apply to the plugin's own tools only.
 
 ### How read-only is enforced
 
@@ -68,6 +68,21 @@ Then:
 ## Configuration
 
 All settings live in `config/project-assistant.php`. Strings can be environment variables (`'$MY_VAR'`). See `src/models/Settings.php` for the complete list.
+
+### Settings page
+
+A few settings can also be changed by an admin in **Settings → Plugins → Project Assistant**. Craft shows that page only to admins, and only where admin changes are allowed (`allowAdminChanges`), so in practice it's edited locally and deployed with project config, like the rest of the CMS settings:
+
+| Setting | What it does |
+|---|---|
+| `assistantName` | Name in the CP sidebar, the chat header and the permissions page |
+| `model` | Model for the client chat (a model ID or an env var such as `$PROJECT_ASSISTANT_MODEL`) |
+| `developerModel` | Model for the developer chat; empty = same as the client chat |
+| `clientMcpAccess` | Craft's own MCP tools in the client chat: `none` (default), `read` (read-only tools) or `write` (also the content edit tools in `clientWriteTools`) |
+
+With `write`, the client chat acts as the signed-in user with their Craft permissions, and **every change waits for the user's approval** in the chat; unlike the developer chat, that can't be turned off. Structure, settings, permissions and plugins are never offered. `clientWriteTools` defaults to the same content tools as `developerWriteTools` and is only set in the config file.
+
+A value set in `config/project-assistant.php` wins over the settings page, and the page shows that field as read-only. So leave these four out of the config file if you want admins to manage them from the CP.
 
 ```php
 <?php

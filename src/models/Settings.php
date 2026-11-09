@@ -9,9 +9,41 @@ use craft\helpers\App;
 /**
  * Plugin settings. Set them per project in `config/project-assistant.php`;
  * every string value can be an environment variable reference (`$MY_VAR`).
+ *
+ * The assistant name, the models and client MCP access can also be set by an
+ * admin in Settings → Plugins → Project Assistant (when admin changes are
+ * allowed, so normally locally). Those are stored in project config; a value
+ * set in the config file wins over them.
  */
 class Settings extends Model
 {
+    /** Client chat: no Craft MCP tools (default). */
+    public const MCP_NONE = 'none';
+    /** Client chat: Craft's read-only MCP tools. */
+    public const MCP_READ = 'read';
+    /** Client chat: read-only tools plus the write tools in clientWriteTools, each approved in the chat. */
+    public const MCP_WRITE = 'write';
+
+    /** Craft MCP write tools offered by default (content only, no structure). */
+    public const DEFAULT_WRITE_TOOLS = [
+        'elements.create',
+        'elements.update',
+        'elements.duplicate',
+        'elements.delete',
+        'elements.restore',
+        'drafts.create',
+        'drafts.apply',
+        'drafts.delete',
+        'revisions.apply',
+        'assets.create',
+        'assets.replace',
+        'asset-folders.create',
+        'structures.move-element',
+    ];
+
+    /** Model used when the setting is empty. */
+    public const DEFAULT_MODEL = 'claude-opus-5-5';
+
     // -- Model -------------------------------------------------------------
 
     /** API key, normally `$ANTHROPIC_API_KEY`. */
@@ -20,8 +52,8 @@ class Settings extends Model
     /** API base URL override (gateways, local testing). Empty = https://api.anthropic.com. */
     public string $baseUrl = '$PROJECT_ASSISTANT_BASE_URL';
 
-    /** Model ID. `claude-sonnet-5-5` is the cheaper alternative. */
-    public string $model = 'claude-opus-5-5';
+    /** Model ID for the client chat. `claude-sonnet-5-5` is the cheaper alternative. */
+    public string $model = self::DEFAULT_MODEL;
 
     /** Reasoning effort: low, medium, high, xhigh, max. */
     public string $effort = 'medium';
@@ -130,6 +162,27 @@ class Settings extends Model
      */
     public array $ticketProvider = ['type' => 'placeholder'];
 
+    // -- Client chat: Craft MCP ---------------------------------------------
+
+    /**
+     * Craft's own MCP tools (Craft 5.12+) in the client chat, acting as the
+     * signed-in user within their Craft permissions:
+     *
+     * - `none`: none; the client chat stays read-only (default).
+     * - `read`: Craft's read-only tools.
+     * - `write`: also the write tools in clientWriteTools. Every change waits
+     *   for the user to approve it in the chat; this can't be turned off.
+     */
+    public string $clientMcpAccess = self::MCP_NONE;
+
+    /**
+     * Craft MCP write tools offered in the client chat when clientMcpAccess is
+     * `write` (fnmatch patterns on Craft's tool names).
+     *
+     * @var string[]
+     */
+    public array $clientWriteTools = self::DEFAULT_WRITE_TOOLS;
+
     // -- Developer chat ------------------------------------------------------
 
     /**
@@ -167,21 +220,7 @@ class Settings extends Model
      *
      * @var string[]
      */
-    public array $developerWriteTools = [
-        'elements.create',
-        'elements.update',
-        'elements.duplicate',
-        'elements.delete',
-        'elements.restore',
-        'drafts.create',
-        'drafts.apply',
-        'drafts.delete',
-        'revisions.apply',
-        'assets.create',
-        'assets.replace',
-        'asset-folders.create',
-        'structures.move-element',
-    ];
+    public array $developerWriteTools = self::DEFAULT_WRITE_TOOLS;
 
     /**
      * The developer chat can read Craft's log files (storage/logs) with the
@@ -226,11 +265,35 @@ class Settings extends Model
         return $user !== null && in_array((int)$user->id, array_map('intval', $this->developerUserIds), true);
     }
 
+    public function getModel(): string
+    {
+        $model = trim((string)App::parseEnv($this->model));
+
+        return $model !== '' ? $model : self::DEFAULT_MODEL;
+    }
+
     public function getDeveloperModel(): string
     {
-        $model = (string)App::parseEnv($this->developerModel);
+        $model = trim((string)App::parseEnv($this->developerModel));
 
-        return $model !== '' ? $model : $this->model;
+        return $model !== '' ? $model : $this->getModel();
+    }
+
+    /** Model IDs with known prices, for the settings page. */
+    public function getModelOptions(): array
+    {
+        return array_keys($this->prices);
+    }
+
+    public function getClientMcpAccess(): string
+    {
+        return in_array($this->clientMcpAccess, [self::MCP_READ, self::MCP_WRITE], true) ? $this->clientMcpAccess : self::MCP_NONE;
+    }
+
+    /** Craft MCP write tools the client chat may use (empty unless clientMcpAccess is `write`). */
+    public function getClientWriteTools(): array
+    {
+        return $this->getClientMcpAccess() === self::MCP_WRITE ? $this->clientWriteTools : [];
     }
 
     public function getDeveloperApiKey(): string
@@ -256,7 +319,8 @@ class Settings extends Model
     protected function defineRules(): array
     {
         return [
-            [['model', 'effort'], 'required'],
+            [['model', 'effort', 'assistantName'], 'required'],
+            ['clientMcpAccess', 'in', 'range' => [self::MCP_NONE, self::MCP_READ, self::MCP_WRITE]],
             ['effort', 'in', 'range' => ['low', 'medium', 'high', 'xhigh', 'max']],
             [['maxTokens', 'maxTurns', 'maxContextChars'], 'integer', 'min' => 1],
             [['monthlyBudget', 'userMonthlyBudget'], 'number', 'min' => 0],

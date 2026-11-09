@@ -15,6 +15,7 @@ use cossette\projectassistant\services\Conversations;
 use cossette\projectassistant\services\Tickets;
 use cossette\projectassistant\services\Tools;
 use cossette\projectassistant\services\Usage;
+use cossette\projectassistant\tools\CraftMcp;
 use yii\base\Event;
 
 /**
@@ -43,7 +44,7 @@ class Plugin extends BasePlugin
 
     public string $schemaVersion = '1.1.0';
     public bool $hasCpSection = true;
-    public bool $hasCpSettings = false;
+    public bool $hasCpSettings = true;
 
     public static function config(): array
     {
@@ -92,6 +93,26 @@ class Plugin extends BasePlugin
     protected function createSettingsModel(): ?Model
     {
         return new Settings();
+    }
+
+    /**
+     * Settings → Plugins → Project Assistant. Craft only shows it to admins,
+     * and only where admin changes are allowed, so it's edited locally and
+     * deployed with project config. Values set in config/project-assistant.php
+     * win, so those fields are shown read-only.
+     */
+    protected function settingsHtml(): ?string
+    {
+        $settings = $this->getSettings();
+        $fromFile = Craft::$app->getConfig()->getConfigFromFile(self::HANDLE);
+        $models = array_map(fn(string $m) => ['label' => $m, 'value' => $m], $settings->getModelOptions());
+
+        return Craft::$app->getView()->renderTemplate(self::HANDLE . '/_settings', [
+            'settings' => $settings,
+            'overridden' => array_fill_keys(array_keys($fromFile), true),
+            'modelSuggestions' => [['label' => Craft::t(self::HANDLE, 'Models'), 'data' => $models]],
+            'craftToolsAvailable' => CraftMcp::isAvailable(),
+        ]);
     }
 
     private function _registerCpRoutes(): void

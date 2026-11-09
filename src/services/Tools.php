@@ -3,6 +3,7 @@
 namespace cossette\projectassistant\services;
 
 use cossette\projectassistant\events\RegisterToolsEvent;
+use cossette\projectassistant\models\Settings;
 use cossette\projectassistant\Plugin;
 use cossette\projectassistant\records\ConversationRecord;
 use cossette\projectassistant\tools\CraftMcp;
@@ -62,8 +63,12 @@ class Tools extends Component
             if (Plugin::getInstance()->getSettings()->developerReadLogs) {
                 $tools[] = new ReadLogsTool();
             }
-            array_push($tools, ...CraftMcp::tools());
+            array_push($tools, ...CraftMcp::tools(Plugin::getInstance()->getSettings()->developerWriteTools));
         } else {
+            $settings = Plugin::getInstance()->getSettings();
+            if ($settings->getClientMcpAccess() !== Settings::MCP_NONE) {
+                array_push($tools, ...CraftMcp::tools($settings->getClientWriteTools()));
+            }
             $tools[] = new ProposeTicketTool();
         }
 
