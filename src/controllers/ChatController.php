@@ -7,13 +7,19 @@ use craft\helpers\Json;
 use craft\web\Controller;
 use cossette\projectassistant\Plugin;
 use cossette\projectassistant\records\ConversationRecord;
+use cossette\projectassistant\tools\CraftMcp;
+use cossette\projectassistant\tools\ProposeTicketTool;
 use cossette\projectassistant\web\assets\chat\ChatAsset;
 use yii\web\ForbiddenHttpException;
 use yii\web\NotFoundHttpException;
 use yii\web\Response;
 
 /**
- * The chat page, the streaming endpoint and the ticket actions.
+ * The chat pages (client and developer), the streaming endpoints, and the
+ * ticket and approval actions.
+ *
+ * Access: the client chat needs the plugin's CP permission; the developer
+ * chat needs the user's ID in `developerUserIds`, whatever their permissions.
  */
 class ChatController extends Controller
 {
@@ -23,12 +29,12 @@ class ChatController extends Controller
             return false;
         }
         $this->requireCpRequest();
-        $this->requirePermission('accessPlugin-' . Plugin::HANDLE);
+        $this->requireLogin();
 
         return true;
     }
 
-    public function actionIndex(?int $conversationId = null): Response
+    public function actionIndex(?int $conversationId = null, string $mode = ConversationRecord::MODE_CLIENT): Response
     {
         $plugin = Plugin::getInstance();
         $user = static::currentUser();
@@ -37,8 +43,11 @@ class ChatController extends Controller
 
         if ($conversationId !== null) {
             $conversation = $this->conversation($conversationId, false);
+            $mode = $conversation->mode;
             $readOnly = !$plugin->conversations->canWrite($conversation, $user);
         }
+        $this->requireMode($mode);
+        $developer = $mode === ConversationRecord::MODE_DEVELOPER;
 
         $view = $this->getView();
         $view->registerAssetBundle(ChatAsset::class);
@@ -46,28 +55,37 @@ class ChatController extends Controller
 
         $provider = $plugin->tickets->getProvider();
         $owner = $conversation && $readOnly ? Craft::$app->getUsers()->getUserById($conversation->userId) : null;
+        $pending = $conversation ? $plugin->agent->getPending($conversation) : null;
 
         return $this->renderTemplate(Plugin::HANDLE . '/index', [
             'assistantName' => $plugin->getSettings()->getAssistantName(),
-            'conversations' => $plugin->conversations->listForUser($user->id),
+            'mode' => $mode,
+            'developer' => $developer,
+            'craftToolsAvailable' => CraftMcp::isAvailable(),
+            'confirmWrites' => $plugin->getSettings()->developerConfirmWrites,
+            'newUrl' => $developer ? Plugin::HANDLE . '/dev' : Plugin::HANDLE,
+            'conversations' => $plugin->conversations->listForUser($user->id, $mode),
             'conversation' => $conversation,
             'owner' => $owner,
             'readOnly' => $readOnly,
-            'configured' => $plugin->agent->isConfigured(),
-            'budgetBlock' => $plugin->usage->budgetBlock($user->id),
+            'configured' => $plugin->agent->isConfigured($mode),
+            'budgetBlock' => $plugin->usage->budgetBlock($user->id, $mode),
             'config' => [
+                'mode' => $mode,
                 'conversationId' => $conversation?->id,
                 'transcript' => $conversation ? $plugin->conversations->getTranscript($conversation) : [],
+                'awaitingApproval' => $pending !== null,
                 'readOnly' => $readOnly,
                 'sendUrl' => 'project-assistant/chat/send',
+                'resolveUrl' => 'project-assistant/chat/resolve',
                 'ticketUrl' => 'project-assistant/chat/ticket',
                 'baseUrl' => Plugin::HANDLE,
                 'ticketProvider' => [
                     'name' => $provider->getName(),
                     'connected' => $provider->isConnected(),
                 ],
-                'categories' => \cossette\projectassistant\tools\ProposeTicketTool::CATEGORIES,
-                'priorities' => \cossette\projectassistant\tools\ProposeTicketTool::PRIORITIES,
+                'categories' => ProposeTicketTool::CATEGORIES,
+                'priorities' => ProposeTicketTool::PRIORITIES,
             ],
         ]);
     }
@@ -95,46 +113,37 @@ class ChatController extends Controller
 
         if ($conversationId) {
             $conversation = $this->conversation((int)$conversationId, true);
+            $this->requireMode($conversation->mode);
         } else {
-            $conversation = $plugin->conversations->create($user, $message !== '' ? $message : Craft::t(Plugin::HANDLE, 'Ticket request'));
+            $mode = $request->getBodyParam('mode') === ConversationRecord::MODE_DEVELOPER
+                ? ConversationRecord::MODE_DEVELOPER
+                : ConversationRecord::MODE_CLIENT;
+            $this->requireMode($mode);
+            $conversation = $plugin->conversations->create($user, $message !== '' ? $message : Craft::t(Plugin::HANDLE, 'Ticket request'), $mode);
         }
 
-        // A question can take a minute: don't hold the session lock, and finish
-        // (and save) even if the browser goes away.
-        Craft::$app->getSession()->close();
-        ignore_user_abort(true);
+        return $this->stream($conversation, function (callable $emit) use ($plugin, $conversation, $user, $message, $requestTicket) {
+            $plugin->agent->ask($conversation, $user, $message, $emit, $requestTicket);
+        });
+    }
 
-        $response = $this->response;
-        $response->format = Response::FORMAT_RAW;
-        $response->headers->set('Content-Type', 'text/event-stream; charset=UTF-8');
-        $response->headers->set('Cache-Control', 'no-cache, no-transform');
-        $response->headers->set('X-Accel-Buffering', 'no');
+    /**
+     * Developer chat: approves or rejects a pending tool call, then streams
+     * the rest of the answer.
+     */
+    public function actionResolve(): Response
+    {
+        $this->requirePostRequest();
+        $plugin = Plugin::getInstance();
+        $user = static::currentUser();
+        $conversation = $this->conversation((int)$this->request->getRequiredBodyParam('conversationId'), true);
+        $this->requireMode($conversation->mode);
+        $toolUseId = (string)$this->request->getRequiredBodyParam('toolUseId');
+        $approve = $this->request->getRequiredBodyParam('decision') === 'approve';
 
-        $response->stream = function () use ($plugin, $conversation, $user, $message, $requestTicket) {
-            while (ob_get_level() > 0) {
-                ob_end_flush();
-            }
-            $emit = function (string $event, array $data) {
-                echo "event: {$event}\ndata: " . Json::encode($data) . "\n\n";
-                flush();
-            };
-            $emit('conversation', [
-                'id' => $conversation->id,
-                'title' => $conversation->title,
-                'url' => $plugin->conversations->url($conversation),
-            ]);
-            try {
-                $plugin->agent->ask($conversation, $user, $message, $emit, $requestTicket);
-            } catch (\Throwable $e) {
-                Craft::error('Assistant failed: ' . $e->getMessage() . "\n" . $e->getTraceAsString(), Plugin::HANDLE);
-                $emit('error', ['message' => Craft::t(Plugin::HANDLE, 'Something went wrong. The error was logged.')]);
-                $emit('done', []);
-            }
-
-            return [];
-        };
-
-        return $response;
+        return $this->stream($conversation, function (callable $emit) use ($plugin, $conversation, $user, $toolUseId, $approve) {
+            $plugin->agent->resolve($conversation, $user, $toolUseId, $approve, $emit);
+        });
     }
 
     /**
@@ -147,6 +156,7 @@ class ChatController extends Controller
         $plugin = Plugin::getInstance();
         $user = static::currentUser();
         $conversation = $this->conversation((int)$this->request->getRequiredBodyParam('conversationId'), true);
+        $this->requireMode($conversation->mode);
 
         if ($this->request->getBodyParam('action') === 'dismiss') {
             $plugin->tickets->dismiss($conversation);
@@ -170,6 +180,68 @@ class ChatController extends Controller
         }
 
         return $this->asSuccess(Craft::t(Plugin::HANDLE, 'Ticket sent.'), ['item' => $item]);
+    }
+
+    /**
+     * Streams the agent's events as server-sent events.
+     *
+     * @param callable(callable(string, array): void): void $run
+     */
+    private function stream(ConversationRecord $conversation, callable $run): Response
+    {
+        $plugin = Plugin::getInstance();
+
+        // A question can take a minute: don't hold the session lock, and finish
+        // (and save) even if the browser goes away.
+        Craft::$app->getSession()->close();
+        ignore_user_abort(true);
+
+        $response = $this->response;
+        $response->format = Response::FORMAT_RAW;
+        $response->headers->set('Content-Type', 'text/event-stream; charset=UTF-8');
+        $response->headers->set('Cache-Control', 'no-cache, no-transform');
+        $response->headers->set('X-Accel-Buffering', 'no');
+
+        $response->stream = function () use ($plugin, $conversation, $run) {
+            while (ob_get_level() > 0) {
+                ob_end_flush();
+            }
+            $emit = function (string $event, array $data) {
+                echo "event: {$event}\ndata: " . Json::encode($data) . "\n\n";
+                flush();
+            };
+            $emit('conversation', [
+                'id' => $conversation->id,
+                'title' => $conversation->title,
+                'url' => $plugin->conversations->url($conversation),
+            ]);
+            try {
+                $run($emit);
+            } catch (\Throwable $e) {
+                Craft::error('Assistant failed: ' . $e->getMessage() . "\n" . $e->getTraceAsString(), Plugin::HANDLE);
+                $emit('error', ['message' => Craft::t(Plugin::HANDLE, 'Something went wrong. The error was logged.')]);
+                $emit('done', []);
+            }
+
+            return [];
+        };
+
+        return $response;
+    }
+
+    /**
+     * Client chat: the plugin's CP permission. Developer chat: a developer user ID.
+     */
+    private function requireMode(string $mode): void
+    {
+        $user = static::currentUser();
+        if ($mode === ConversationRecord::MODE_DEVELOPER) {
+            if (!Plugin::getInstance()->getSettings()->isDeveloper($user)) {
+                throw new ForbiddenHttpException('The developer chat isn’t available to you.');
+            }
+            return;
+        }
+        $this->requirePermission('accessPlugin-' . Plugin::HANDLE);
     }
 
     private function conversation(int $id, bool $write): ConversationRecord

@@ -16,6 +16,7 @@ class Install extends Migration
             $this->createTable(self::CONVERSATIONS, [
                 'id' => $this->primaryKey(),
                 'userId' => $this->integer()->notNull(),
+                'mode' => $this->string(16)->notNull()->defaultValue('client'),
                 'title' => $this->string(255)->notNull()->defaultValue(''),
                 // Model-facing history in API wire format (thinking blocks included, replayed verbatim).
                 'messages' => $this->longText(),
@@ -23,6 +24,8 @@ class Install extends Migration
                 'transcript' => $this->longText(),
                 // Note for the model, prepended to the next user message (e.g. "ticket X was created").
                 'pendingNote' => $this->text(),
+                // Developer chat: tool calls waiting for the developer's approval, with the results so far.
+                'pendingTools' => $this->longText(),
                 'ticketDraft' => $this->text(),
                 'ticketReference' => $this->string(255),
                 'ticketUrl' => $this->string(1024),

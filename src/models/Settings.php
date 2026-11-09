@@ -130,6 +130,62 @@ class Settings extends Model
      */
     public array $ticketProvider = ['type' => 'placeholder'];
 
+    // -- Developer chat ------------------------------------------------------
+
+    /**
+     * Users who can open the developer chat (user IDs). Empty = no developer chat.
+     *
+     * The developer chat adds Craft's own MCP tools (Craft 5.12+), so the
+     * assistant can create and edit content as the signed-in user, within
+     * their permissions. It's meant for the agency's developers, not clients.
+     *
+     * @var int[]
+     */
+    public array $developerUserIds = [];
+
+    /** Model for the developer chat. Empty = same as `model`. */
+    public string $developerModel = '';
+
+    /**
+     * API key for the developer chat, so developer usage isn't billed to the
+     * client's key. Empty = same as `apiKey`.
+     */
+    public string $developerApiKey = '';
+
+    /**
+     * Every tool call that can change something waits for the developer to
+     * click Approve in the chat. Turning this off lets the assistant act on its own.
+     */
+    public bool $developerConfirmWrites = true;
+
+    /**
+     * Craft MCP tools that can change something and are offered in the
+     * developer chat (fnmatch patterns on Craft's tool names, e.g. `drafts.*`).
+     * Read-only Craft tools are always offered. Project config, plugins,
+     * permissions and system settings are left out by default: structural
+     * changes should go through project config YAML in git.
+     *
+     * @var string[]
+     */
+    public array $developerWriteTools = [
+        'elements.create',
+        'elements.update',
+        'elements.duplicate',
+        'elements.delete',
+        'elements.restore',
+        'drafts.create',
+        'drafts.apply',
+        'drafts.delete',
+        'revisions.apply',
+        'assets.create',
+        'assets.replace',
+        'asset-folders.create',
+        'structures.move-element',
+    ];
+
+    /** Extra instructions for the developer chat only. */
+    public string $developerInstructions = '';
+
     // -- Getters -------------------------------------------------------------
 
     public function getApiKey(): string
@@ -157,6 +213,25 @@ class Settings extends Model
         $name = (string)App::parseEnv($this->projectName);
 
         return $name !== '' ? $name : (string)Craft::$app->getSystemName();
+    }
+
+    public function isDeveloper(?\craft\elements\User $user): bool
+    {
+        return $user !== null && in_array((int)$user->id, array_map('intval', $this->developerUserIds), true);
+    }
+
+    public function getDeveloperModel(): string
+    {
+        $model = (string)App::parseEnv($this->developerModel);
+
+        return $model !== '' ? $model : $this->model;
+    }
+
+    public function getDeveloperApiKey(): string
+    {
+        $key = (string)App::parseEnv($this->developerApiKey);
+
+        return $key !== '' ? $key : $this->getApiKey();
     }
 
     public function isSqlEnabled(): bool

@@ -24,10 +24,11 @@ class Conversations extends Component
      */
     private array $loaded = [];
 
-    public function create(User $user, string $firstMessage): ConversationRecord
+    public function create(User $user, string $firstMessage, string $mode = ConversationRecord::MODE_CLIENT): ConversationRecord
     {
         $record = new ConversationRecord();
         $record->userId = $user->id;
+        $record->mode = $mode;
         $title = trim(preg_replace('/\s+/', ' ', $firstMessage) ?? '');
         $record->title = mb_strlen($title) > 80 ? mb_substr($title, 0, 79) . '…' : $title;
         $record->messages = '[]';
@@ -50,33 +51,45 @@ class Conversations extends Component
         return $this->loaded[$id];
     }
 
-    /** Owners can write to their conversations; usage viewers can read everyone's. */
+    /**
+     * Owners can write to their conversations; usage viewers can read everyone's.
+     * Developer chats are only ever visible to developers.
+     */
     public function canView(ConversationRecord $conversation, User $user): bool
     {
+        if ($conversation->isDeveloper() && !Plugin::getInstance()->getSettings()->isDeveloper($user)) {
+            return false;
+        }
+
         return $conversation->userId === $user->id || $user->can(Plugin::PERMISSION_VIEW_USAGE);
     }
 
     public function canWrite(ConversationRecord $conversation, User $user): bool
     {
+        if ($conversation->isDeveloper() && !Plugin::getInstance()->getSettings()->isDeveloper($user)) {
+            return false;
+        }
+
         return $conversation->userId === $user->id;
     }
 
     /** @return ConversationRecord[] */
-    public function listForUser(int $userId, int $limit = 50): array
+    public function listForUser(int $userId, string $mode = ConversationRecord::MODE_CLIENT, int $limit = 50): array
     {
         return ConversationRecord::find()
-            ->select(['id', 'userId', 'title', 'ticketReference', 'dateCreated', 'dateUpdated'])
-            ->where(['userId' => $userId])
+            ->select(['id', 'userId', 'mode', 'title', 'ticketReference', 'dateCreated', 'dateUpdated'])
+            ->where(['userId' => $userId, 'mode' => $mode])
             ->orderBy(['dateUpdated' => SORT_DESC])
             ->limit($limit)
             ->all();
     }
 
     /** @return ConversationRecord[] */
-    public function listAll(int $limit = 100): array
+    public function listAll(int $limit = 100, bool $includeDeveloper = false): array
     {
         return ConversationRecord::find()
-            ->select(['id', 'userId', 'title', 'ticketReference', 'ticketStatus', 'costUsd', 'dateCreated', 'dateUpdated'])
+            ->select(['id', 'userId', 'mode', 'title', 'ticketReference', 'ticketStatus', 'costUsd', 'dateCreated', 'dateUpdated'])
+            ->filterWhere(['mode' => $includeDeveloper ? null : ConversationRecord::MODE_CLIENT])
             ->orderBy(['dateUpdated' => SORT_DESC])
             ->limit($limit)
             ->all();
@@ -149,6 +162,19 @@ class Conversations extends Component
             if (($items[$i]['type'] ?? null) === $type) {
                 $items[$i] = array_merge($items[$i], $changes);
                 break;
+            }
+        }
+        $conversation->transcript = Json::encode($items);
+        $conversation->save(false);
+    }
+
+    /** Updates the transcript item of a given type and id (e.g. an approval card). */
+    public function updateTranscriptItem(ConversationRecord $conversation, string $type, string $id, array $changes): void
+    {
+        $items = $this->getTranscript($conversation);
+        foreach ($items as $i => $item) {
+            if (($item['type'] ?? null) === $type && ($item['id'] ?? null) === $id) {
+                $items[$i] = array_merge($item, $changes);
             }
         }
         $conversation->transcript = Json::encode($items);

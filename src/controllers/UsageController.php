@@ -27,7 +27,7 @@ class UsageController extends Controller
     {
         $plugin = Plugin::getInstance();
         $settings = $plugin->getSettings();
-        $conversations = $plugin->conversations->listAll(100);
+        $conversations = $plugin->conversations->listAll(100, $settings->isDeveloper(static::currentUser()));
         $userIds = array_unique(array_map(fn($c) => $c->userId, $conversations));
         $users = [];
         foreach ($userIds as $id) {

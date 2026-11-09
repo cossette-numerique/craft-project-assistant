@@ -41,7 +41,7 @@ class Plugin extends BasePlugin
     /** Lets a user see the usage page and read every user's conversations. */
     public const PERMISSION_VIEW_USAGE = 'projectAssistant-viewUsage';
 
-    public string $schemaVersion = '1.0.0';
+    public string $schemaVersion = '1.1.0';
     public bool $hasCpSection = true;
     public bool $hasCpSettings = false;
 
@@ -75,11 +75,15 @@ class Plugin extends BasePlugin
         $item['icon'] = 'comments';
 
         $user = Craft::$app->getUser();
+        $subnav = ['chat' => ['label' => Craft::t(self::HANDLE, 'Chat'), 'url' => self::HANDLE]];
+        if ($this->getSettings()->isDeveloper($user->getIdentity())) {
+            $subnav['developer'] = ['label' => Craft::t(self::HANDLE, 'Developer chat'), 'url' => self::HANDLE . '/dev'];
+        }
         if ($user->checkPermission(self::PERMISSION_VIEW_USAGE)) {
-            $item['subnav'] = [
-                'chat' => ['label' => Craft::t(self::HANDLE, 'Chat'), 'url' => self::HANDLE],
-                'usage' => ['label' => Craft::t(self::HANDLE, 'Usage'), 'url' => self::HANDLE . '/usage'],
-            ];
+            $subnav['usage'] = ['label' => Craft::t(self::HANDLE, 'Usage'), 'url' => self::HANDLE . '/usage'];
+        }
+        if (count($subnav) > 1) {
+            $item['subnav'] = $subnav;
         }
 
         return $item;
@@ -95,6 +99,7 @@ class Plugin extends BasePlugin
         Event::on(UrlManager::class, UrlManager::EVENT_REGISTER_CP_URL_RULES, function (RegisterUrlRulesEvent $event) {
             $event->rules[self::HANDLE] = self::HANDLE . '/chat/index';
             $event->rules[self::HANDLE . '/c/<conversationId:\d+>'] = self::HANDLE . '/chat/index';
+            $event->rules[self::HANDLE . '/dev'] = ['route' => self::HANDLE . '/chat/index', 'defaults' => ['mode' => 'developer']];
             $event->rules[self::HANDLE . '/usage'] = self::HANDLE . '/usage/index';
         });
     }

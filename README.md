@@ -22,7 +22,7 @@ The assistant's tools are **read-only**:
 | `run_sql` | Read-only SQL on a dedicated connection (off unless configured) |
 | `propose_ticket` | Draft a ticket. Nothing is sent: the user confirms in the UI |
 
-Projects can add their own read-only tools (see [Project tools](#project-tools)).
+Projects can add their own read-only tools (see [Project tools](#project-tools)). The [developer chat](#developer-chat) adds write tools for the agency's developers.
 
 ### How read-only is enforced
 
@@ -172,6 +172,42 @@ When the assistant concludes the CMS can't do something, it offers a ticket and 
 ```
 
 The transcript contains only what was said: questions and answers. Raw tool results (database rows, file contents) are never included. The full conversation stays in the CP at `conversation.url`, for users with the usage permission.
+
+## Developer chat
+
+A second chat, **Assistant → Developer chat**, for the agency's developers. It can **change content**, not just read it. Only the user IDs in `developerUserIds` can open it; everyone else gets a 403, and that includes other admins. It is off when the list is empty.
+
+```php
+'developerUserIds' => [1],
+'developerConfirmWrites' => true,                       // default: every change waits for approval
+'developerApiKey' => '$PROJECT_ASSISTANT_DEVELOPER_API_KEY', // optional: keep developer usage off the client's bill
+'developerModel' => 'claude-opus-5-5',                  // optional
+'developerInstructions' => '',                           // optional extra prompt for this chat
+```
+
+**Tools:** the read tools above, plus Craft's own MCP tools (Craft 5.12+, offered to the model as `craft_*`). They're called in-process and act as the signed-in developer, so Craft checks that user's permissions on every call. You get every read-only Craft tool, and the write tools listed in `developerWriteTools`:
+- entries and elements: create, update, duplicate, delete, restore
+- drafts and revisions
+- assets
+- structure order
+
+Project config, plugins, user permissions and system settings are left out on purpose: structural changes keep going through project config YAML in git. The MCP server doesn't need to be enabled for the developer chat.
+
+**Approvals:** when the model calls a tool that can change something, the run pauses. The chat shows the tool and its exact arguments, with **Approve** and **Reject** buttons:
+- **Approve** runs the call as you, then resumes the run.
+- **Reject** tells the model it wasn't run.
+- **Sending a new message** rejects whatever is still pending.
+
+Content written by the public can't trigger a change on its own: it would still need a click. Every call, its arguments and the decision are logged in the audit log.
+
+**Billing:** if `developerApiKey` is set, the developer chat uses it, and its spend isn't counted against the client's budgets.
+
+**Console:** to test the developer mode from the command line:
+
+```bash
+php craft project-assistant/assistant/tools --mode=developer --user=1
+php craft project-assistant/assistant/ask "Create a draft of entry 123" --mode=developer --user=1 --approve
+```
 
 ## Project tools
 
