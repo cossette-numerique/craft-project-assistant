@@ -3,7 +3,6 @@
 namespace cossette\projectassistant\tools;
 
 use Craft;
-use cossette\projectassistant\Plugin;
 use Mcp\Capability\Registry\ReferenceHandler;
 use Mcp\Capability\Registry\ToolReference;
 
@@ -22,9 +21,12 @@ class CraftMcp
     }
 
     /**
+     * Every read-only Craft tool, plus the write tools matching $writePatterns.
+     *
+     * @param string[] $writePatterns fnmatch patterns on Craft's tool names
      * @return CraftMcpTool[]
      */
-    public static function tools(): array
+    public static function tools(array $writePatterns = []): array
     {
         if (!self::isAvailable() || !Craft::$app->getUser()->getIdentity()) {
             return [];
@@ -36,7 +38,6 @@ class CraftMcp
         $directory = dirname((new \ReflectionClass(\craft\mcp\ServerFactory::class))->getFileName()) . '/capabilities';
         $state = $discovery->discover($directory, ['.']);
         $handler = new ReferenceHandler($container);
-        $writePatterns = Plugin::getInstance()->getSettings()->developerWriteTools;
 
         $tools = [];
         foreach ($state->getTools() as $reference) {

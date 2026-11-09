@@ -18,7 +18,7 @@
             </div>
             <div class="pa-card">
                 <div class="pa-card__label">{{ 'Model'|t('project-assistant') }}</div>
-                <div class="pa-card__value pa-card__value--small"><code>{{ settings.model }}</code></div>
+                <div class="pa-card__value pa-card__value--small"><code>{{ settings.getModel() }}</code></div>
                 <div class="pa-card__meta">{{ 'Effort: {effort}'|t('project-assistant', {effort: settings.effort}) }}{% if settings.userMonthlyBudget > 0 %} · {{ 'Per-user budget: {budget}/month'|t('project-assistant', {budget: _self.usd(settings.userMonthlyBudget)}) }}{% endif %}</div>
             </div>
             <div class="pa-card">

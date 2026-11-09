@@ -1,0 +1,86 @@
+{#
+ # Settings → Plugins → Project Assistant. Craft shows this page to admins
+ # only, where admin changes are allowed. Values are saved to project config.
+ # A setting also set in config/project-assistant.php wins: it's shown disabled.
+ #}
+{% import '_includes/forms' as forms %}
+
+{% macro overrideWarning(key, overridden) %}
+    {%- if overridden[key] ?? false -%}
+        {{ 'This is set in {file}, which overrides the value saved here.'|t('project-assistant', {file: '<code>config/project-assistant.php</code>'})|raw }}
+    {%- endif -%}
+{% endmacro %}
+
+<h2>{{ 'Chat'|t('project-assistant') }}</h2>
+
+{{ forms.autosuggestField({
+    label: 'Name in the control panel'|t('project-assistant'),
+    instructions: 'Shown in the sidebar, the chat header and the permissions page.'|t('project-assistant'),
+    id: 'assistantName',
+    name: 'assistantName',
+    value: settings.assistantName,
+    suggestEnvVars: true,
+    disabled: overridden.assistantName ?? false,
+    warning: _self.overrideWarning('assistantName', overridden),
+    errors: settings.getErrors('assistantName'),
+    required: true,
+}) }}
+
+{{ forms.autosuggestField({
+    label: 'Model'|t('project-assistant'),
+    instructions: 'Model for the client chat. Pick one or type a model ID, or an environment variable like `$PROJECT_ASSISTANT_MODEL`. Opus answers best; Sonnet costs about half as much.'|t('project-assistant'),
+    id: 'model',
+    name: 'model',
+    value: settings.model,
+    suggestions: modelSuggestions,
+    suggestEnvVars: true,
+    disabled: overridden.model ?? false,
+    warning: _self.overrideWarning('model', overridden),
+    tip: settings.getModel() != settings.model ? 'Currently resolves to {model}.'|t('project-assistant', {model: settings.getModel()}) : null,
+    errors: settings.getErrors('model'),
+    required: true,
+}) }}
+
+{{ forms.autosuggestField({
+    label: 'Developer chat model'|t('project-assistant'),
+    instructions: 'Leave empty to use the same model as the client chat.'|t('project-assistant'),
+    id: 'developerModel',
+    name: 'developerModel',
+    value: settings.developerModel,
+    suggestions: modelSuggestions,
+    suggestEnvVars: true,
+    disabled: overridden.developerModel ?? false,
+    warning: _self.overrideWarning('developerModel', overridden),
+    tip: settings.developerModel and settings.getDeveloperModel() != settings.developerModel ? 'Currently resolves to {model}.'|t('project-assistant', {model: settings.getDeveloperModel()}) : null,
+    errors: settings.getErrors('developerModel'),
+}) }}
+
+<hr>
+
+<h2>{{ 'Craft tools in the client chat'|t('project-assistant') }}</h2>
+
+{{ forms.selectField({
+    label: 'Client access to Craft’s MCP tools'|t('project-assistant'),
+    instructions: 'Lets the client chat use Craft’s own tools as the signed-in user, within their Craft permissions. With editing on, every change waits for the user to approve it in the chat. Structure, settings and permissions are never available.'|t('project-assistant'),
+    id: 'clientMcpAccess',
+    name: 'clientMcpAccess',
+    value: settings.clientMcpAccess,
+    options: [
+        {label: 'Off: the client chat can’t change anything'|t('project-assistant'), value: 'none'},
+        {label: 'Read only: Craft’s read tools'|t('project-assistant'), value: 'read'},
+        {label: 'Read and edit content, with approval'|t('project-assistant'), value: 'write'},
+    ],
+    disabled: overridden.clientMcpAccess ?? false,
+    warning: (overridden.clientMcpAccess ?? false)
+        ? _self.overrideWarning('clientMcpAccess', overridden)
+        : (not craftToolsAvailable ? 'Craft’s MCP tools need Craft 5.12 or later: this setting has no effect on this install.'|t('project-assistant') : null),
+    errors: settings.getErrors('clientMcpAccess'),
+}) }}
+
+{% if settings.clientWriteTools %}
+    <p class="light">
+        {{ 'Edit tools offered when editing is on:'|t('project-assistant') }}
+        {% for pattern in settings.clientWriteTools %}<code>{{ pattern }}</code>{% if not loop.last %}, {% endif %}{% endfor %}.
+        {{ 'Change the list with {setting} in {file}.'|t('project-assistant', {setting: '<code>clientWriteTools</code>', file: '<code>config/project-assistant.php</code>'})|raw }}
+    </p>
+{% endif %}

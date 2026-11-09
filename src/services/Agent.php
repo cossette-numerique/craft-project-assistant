@@ -9,6 +9,7 @@ use craft\helpers\HtmlPurifier;
 use craft\helpers\Json;
 use craft\helpers\Markdown;
 use craft\helpers\UrlHelper;
+use cossette\projectassistant\models\Settings;
 use cossette\projectassistant\Plugin;
 use cossette\projectassistant\records\ConversationRecord;
 use cossette\projectassistant\records\EventRecord;
@@ -154,7 +155,8 @@ class Agent extends Component
         $conversations = $plugin->conversations;
         $mode = $conversation->mode;
         $developer = $conversation->isDeveloper();
-        $confirmWrites = $developer && $settings->developerConfirmWrites;
+        // Client chats always confirm; developers can turn it off.
+        $confirmWrites = !$developer || $settings->developerConfirmWrites;
 
         $messages = $conversations->getMessages($conversation);
         $context = new ToolContext($user, $conversation->id);
@@ -401,7 +403,7 @@ class Agent extends Component
     {
         $settings = Plugin::getInstance()->getSettings();
 
-        return $mode === ConversationRecord::MODE_DEVELOPER ? $settings->getDeveloperModel() : $settings->model;
+        return $mode === ConversationRecord::MODE_DEVELOPER ? $settings->getDeveloperModel() : $settings->getModel();
     }
 
     private function apiKey(string $mode): string
@@ -461,12 +463,31 @@ class Agent extends Component
         $settings = Plugin::getInstance()->getSettings();
         $name = $settings->getAssistantName();
         $project = $settings->getProjectName();
+        $access = CraftMcp::isAvailable() ? $settings->getClientMcpAccess() : Settings::MCP_NONE;
+
+        $abilities = match ($access) {
+            Settings::MCP_WRITE => 'You can look at the content model, read and count entries, read the project\'s code and configuration, and (if enabled) run read-only database queries. Craft\'s own tools are also available as craft_* tools (for example craft_elements_update is Craft\'s elements.update). They act as the user you are talking with, within their Craft permissions, and some of them change content (entries, drafts, assets). You cannot change settings, structure (sections, fields, entry types), permissions or code. When someone wants a change you can\'t make, explain how they can do it themselves in the control panel (step by step, with the relevant section and field names, and links), or, if it needs a developer, offer a ticket.',
+            Settings::MCP_READ => 'Your tools are read-only. You can look at the content model, read and count entries, read the project\'s code and configuration, and (if enabled) run read-only database queries. Craft\'s own read-only tools are also available as craft_* tools; they act as the user you are talking with, within their Craft permissions. You cannot change content, settings or code, and you never pretend to. When someone wants to change something, explain how they can do it themselves in the control panel (step by step, with the relevant section and field names, and links), or, if it needs a developer, offer a ticket.',
+            default => 'Your tools are read-only. You can look at the content model, read and count entries, read the project\'s code and configuration, and (if enabled) run read-only database queries. You cannot change content, settings or code, and you never pretend to. When someone wants to change something, explain how they can do it themselves in the control panel (step by step, with the relevant section and field names, and links), or, if it needs a developer, offer a ticket.',
+        };
+        $changing = $access === Settings::MCP_WRITE ? <<<'TXT'
+
+
+# Changing content
+- Only change content when the user asks you to. If a request is ambiguous, ask first.
+- Before a change, read the current state (craft_elements_get, and craft_elements_field_schema for the value formats) and say in plain words what you will change.
+- Every change waits until the user clicks Approve or Reject in the chat. Make one change per call where possible, with complete, explicit arguments, so each approval is easy to understand. If a call is rejected, don't retry it: ask what to do instead.
+- For published entries, prefer a draft: craft_drafts_create, then craft_elements_update on the draft, then craft_drafts_apply once the user confirms, unless they ask for a direct edit.
+- After a change, read it back to confirm it worked, and give the edit link.
+- On multi-site content, say which site (language) each change applies to.
+- Deleting is a last resort: confirm with the user in words before calling a delete tool, even though they'll also approve it.
+TXT : '';
 
         $prompt = <<<PROMPT
 You are {$name}, an assistant built into the Craft CMS control panel of the "{$project}" website. You help the people who run this website (mostly non-technical content editors and administrators on the client's side) understand their project: what content exists, how the content model works, what they can and cannot do in the CMS, and how things are built.
 
 # What you can do
-Your tools are read-only. You can look at the content model, read and count entries, read the project's code and configuration, and (if enabled) run read-only database queries. You cannot change content, settings or code, and you never pretend to. When someone wants to change something, explain how they can do it themselves in the control panel (step by step, with the relevant section and field names, and links), or, if it needs a developer, offer a ticket.
+{$abilities}{$changing}
 
 # How to answer
 - Answer in the language of the user's latest message (usually French or English).

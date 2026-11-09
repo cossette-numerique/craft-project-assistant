@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Settings page (**Settings → Plugins → Project Assistant**, admins only, where admin changes are allowed) for the assistant name, the client and developer chat models, and client access to Craft's MCP tools. Values are saved to project config; a value in `config/project-assistant.php` still wins and shows as read-only.
+- New `clientMcpAccess` setting: `none` (default), `read` (Craft's read-only MCP tools in the client chat) or `write` (also the content edit tools in the new `clientWriteTools`). In the client chat every change always waits for the user's approval.
+- `model` and `developerModel` accept environment variables.
+
+## 1.0.0-beta.4 - 2026-11-09
+
 - Developer chat: new read-only `read_logs` tool for Craft's log files (`storage/logs`). It lists the files, newest first, and returns the last lines of one, optionally only the lines containing a search term, reading from the end so large logs stay cheap. Values of secret-looking environment variables, common credential patterns, cookies and session entries in Craft's variable dumps are redacted. On by default; turn it off with `developerReadLogs`. The client chat doesn't get it.
 
 ## 1.0.0-beta.3 - 2026-11-09

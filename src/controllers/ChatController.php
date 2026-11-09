@@ -62,7 +62,8 @@ class ChatController extends Controller
             'mode' => $mode,
             'developer' => $developer,
             'craftToolsAvailable' => CraftMcp::isAvailable(),
-            'confirmWrites' => $plugin->getSettings()->developerConfirmWrites,
+            'confirmWrites' => !$developer || $plugin->getSettings()->developerConfirmWrites,
+            'clientMcpAccess' => CraftMcp::isAvailable() ? $plugin->getSettings()->getClientMcpAccess() : 'none',
             'newUrl' => $developer ? Plugin::HANDLE . '/dev' : Plugin::HANDLE,
             'conversations' => $plugin->conversations->listForUser($user->id, $mode),
             'conversation' => $conversation,
@@ -128,7 +129,8 @@ class ChatController extends Controller
     }
 
     /**
-     * Developer chat: approves or rejects a pending tool call, then streams
+     * Approves or rejects a pending tool call (developer chat, or client chat
+     * with Craft edit tools), then streams
      * the rest of the answer.
      */
     public function actionResolve(): Response

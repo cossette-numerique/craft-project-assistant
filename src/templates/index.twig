@@ -53,6 +53,11 @@
             {% endif %}
         </div>
     {% endif %}
+    {% if not developer and clientMcpAccess == 'write' %}
+        <div class="pa-alert pa-alert--developer">
+            {{ 'The assistant can change content as you, with your permissions. Every change waits for your approval.'|t('project-assistant') }}
+        </div>
+    {% endif %}
     {% if readOnly and owner %}
         <div class="pa-alert pa-alert--info">
             {{ 'You’re viewing a conversation by {name}. It’s read-only.'|t('project-assistant', {name: owner.friendlyName}) }}
@@ -73,7 +78,11 @@
             {% elseif not conversation %}
                 <div class="pa-welcome">
                     <h2>{{ 'Ask anything about your website'|t('project-assistant') }}</h2>
-                    <p>{{ 'The assistant can look at your content, how the CMS is set up, and how the site is built. It can’t change anything. If something can’t be done with the CMS, it can prepare a ticket for the development team.'|t('project-assistant') }}</p>
+                    {% if clientMcpAccess == 'write' %}
+                        <p>{{ 'The assistant can look at your content, how the CMS is set up, and how the site is built, and make content changes for you. It shows each change for your approval before it runs. If something can’t be done with the CMS, it can prepare a ticket for the development team.'|t('project-assistant') }}</p>
+                    {% else %}
+                        <p>{{ 'The assistant can look at your content, how the CMS is set up, and how the site is built. It can’t change anything. If something can’t be done with the CMS, it can prepare a ticket for the development team.'|t('project-assistant') }}</p>
+                    {% endif %}
                     <ul class="pa-examples">
                         <li><button type="button" class="pa-example">{{ 'How many events are published this year?'|t('project-assistant') }}</button></li>
                         <li><button type="button" class="pa-example">{{ 'How do I add a new page to the menu?'|t('project-assistant') }}</button></li>
@@ -85,7 +94,7 @@
         {% if not readOnly %}
             <form class="pa-composer" autocomplete="off">
                 <label for="pa-input" class="visually-hidden">{{ 'Your question'|t('project-assistant') }}</label>
-                <textarea id="pa-input" rows="2" maxlength="8000" placeholder="{{ developer ? 'Ask or request a change…'|t('project-assistant') : 'Ask a question about the website…'|t('project-assistant') }}" {% if not configured or budgetBlock %}disabled{% endif %}></textarea>
+                <textarea id="pa-input" rows="2" maxlength="8000" placeholder="{{ developer or clientMcpAccess == 'write' ? 'Ask or request a change…'|t('project-assistant') : 'Ask a question about the website…'|t('project-assistant') }}" {% if not configured or budgetBlock %}disabled{% endif %}></textarea>
                 <div class="pa-composer__actions">
                     {% if not developer %}
                         <button type="button" class="btn pa-ticket-btn" {% if not configured or budgetBlock or not conversation %}disabled{% endif %}>{{ 'Create a ticket'|t('project-assistant') }}</button>
