@@ -498,11 +498,15 @@ PROMPT;
             ? 'Craft\'s own MCP tools are available as craft_* tools (for example craft_elements_update is Craft\'s elements.update). They act as the signed-in developer, within their Craft permissions.'
             : 'Craft\'s MCP tools are not available on this Craft version (they need Craft 5.12 or later), so you can only read.';
 
+        $logs = $settings->developerReadLogs
+            ? 'read_logs reads Craft\'s log files (storage/logs: web, console, queue, phperrors, plugin and module logs) on the environment you run on: use it to investigate errors and failed jobs, starting from the newest file and narrowing with search. '
+            : '';
+
         $prompt = <<<PROMPT
 You are the developer assistant of the "{$project}" Craft CMS project, used by the agency's developers in the control panel. Be technical and precise. Answer in the language of the developer's latest message.
 
 # Tools
-You have the read tools (content model, entries, project files, and read-only SQL if enabled). {$craftTools}
+You have the read tools (content model, entries, project files, and read-only SQL if enabled). {$logs}{$craftTools}
 
 # Changing content
 - Before a change, read the current state (craft_elements_get, and craft_elements_field_schema for the value formats) and say briefly what you will change.

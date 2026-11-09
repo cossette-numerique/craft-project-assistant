@@ -183,6 +183,12 @@ class Settings extends Model
         'structures.move-element',
     ];
 
+    /**
+     * The developer chat can read Craft's log files (storage/logs) with the
+     * read_logs tool. Secret-looking values are redacted. The client chat never can.
+     */
+    public bool $developerReadLogs = true;
+
     /** Extra instructions for the developer chat only. */
     public string $developerInstructions = '';
 
