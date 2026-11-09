@@ -27,15 +27,24 @@ class AssistantController extends Controller
     /** Continue this conversation ID (ask). */
     public ?int $conversation = null;
 
+    /** `client` (default) or `developer` (adds Craft's MCP tools; the user must be in developerUserIds). */
+    public string $mode = 'client';
+
+    /** Developer mode: approve every pending change automatically (ask). Otherwise the run stops at the first approval. */
+    public bool $approve = false;
+
     public function options($actionID): array
     {
-        return array_merge(parent::options($actionID), ['user', 'conversation']);
+        return array_merge(parent::options($actionID), ['user', 'conversation', 'mode', 'approve']);
     }
 
     /** Lists the tools the assistant has, with their descriptions. */
     public function actionTools(): int
     {
-        foreach (Plugin::getInstance()->tools->getTools() as $tool) {
+        if ($this->mode === 'developer' && !$this->resolveUser()) {
+            return ExitCode::UNSPECIFIED_ERROR;
+        }
+        foreach (Plugin::getInstance()->tools->getTools($this->mode) as $tool) {
             $this->stdout($tool->getName(), Console::FG_GREEN);
             $this->stdout("\n  " . wordwrap($tool->getDescription(), 100, "\n  ") . "\n\n");
         }
@@ -50,7 +59,7 @@ class AssistantController extends Controller
         if (!$user) {
             return ExitCode::UNSPECIFIED_ERROR;
         }
-        $result = Plugin::getInstance()->tools->execute($name, Json::decode($input) ?? [], new ToolContext($user));
+        $result = Plugin::getInstance()->tools->execute($name, Json::decode($input) ?? [], new ToolContext($user), $this->mode);
         $this->stdout(($result->isError ? '[error] ' : '') . $result->content . "\n", $result->isError ? Console::FG_RED : Console::RESET);
 
         return $result->isError ? ExitCode::UNSPECIFIED_ERROR : ExitCode::OK;
@@ -63,7 +72,7 @@ class AssistantController extends Controller
         if (!$user) {
             return ExitCode::UNSPECIFIED_ERROR;
         }
-        $blocks = Plugin::getInstance()->agent->systemPrompt($user);
+        $blocks = Plugin::getInstance()->agent->systemPrompt($user, $this->mode);
         $text = implode("\n\n----- (cache breakpoint) -----\n\n", array_column($blocks, 'text'));
         $this->stdout($text . "\n\n");
         $this->stdout(sprintf("%d characters (~%d tokens)\n", mb_strlen($text), mb_strlen($text) / 4), Console::FG_YELLOW);
@@ -79,25 +88,41 @@ class AssistantController extends Controller
             return ExitCode::UNSPECIFIED_ERROR;
         }
         $plugin = Plugin::getInstance();
+        if ($this->mode === 'developer' && !$plugin->getSettings()->isDeveloper($user)) {
+            $this->stderr("User #{$user->id} isn't in developerUserIds\n", Console::FG_RED);
+            return ExitCode::UNSPECIFIED_ERROR;
+        }
         $conversation = $this->conversation
             ? $plugin->conversations->getById($this->conversation)
-            : $plugin->conversations->create($user, $question);
+            : $plugin->conversations->create($user, $question, $this->mode);
         if (!$conversation) {
             $this->stderr("Conversation not found\n", Console::FG_RED);
             return ExitCode::UNSPECIFIED_ERROR;
         }
         $this->stdout("Conversation #{$conversation->id}\n", Console::FG_GREY);
 
-        $plugin->agent->ask($conversation, $user, $question, function (string $event, array $data) {
+        $emit = function (string $event, array $data) {
             match ($event) {
                 'tool' => $this->stdout("  → {$data['label']}\n", Console::FG_CYAN),
+                'approval' => $this->stdout("  ? approval needed: {$data['tool']} " . Json::encode($data['input'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n", Console::FG_YELLOW),
+                'approval_resolved' => $this->stdout("  = {$data['state']}\n", Console::FG_YELLOW),
                 'assistant' => $this->stdout("\n{$data['text']}\n\n"),
                 'ticket_draft' => $this->stdout("[ticket draft]\n" . Json::encode($data['draft'], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) . "\n", Console::FG_YELLOW),
                 'error', 'notice' => $this->stdout("[{$event}] {$data['message']}\n", Console::FG_RED),
                 'done' => $this->stdout(sprintf("Cost: $%.4f\n", $data['questionCostUsd'] ?? 0), Console::FG_GREY),
                 default => null,
             };
-        });
+        };
+        $plugin->agent->ask($conversation, $user, $question, $emit);
+
+        while ($this->approve && ($pending = $plugin->agent->getPending($conversation))) {
+            foreach ($pending['calls'] as $id => $call) {
+                if ($call['status'] === 'pending') {
+                    $plugin->agent->resolve($conversation, $user, $id, true, $emit);
+                    break;
+                }
+            }
+        }
 
         return ExitCode::OK;
     }
@@ -105,11 +130,14 @@ class AssistantController extends Controller
     private function resolveUser(): ?User
     {
         $user = $this->user
-            ? Craft::$app->getUsers()->getUserByUsernameOrEmail($this->user)
+            ? (ctype_digit($this->user) ? Craft::$app->getUsers()->getUserById((int)$this->user) : Craft::$app->getUsers()->getUserByUsernameOrEmail($this->user))
             : User::find()->admin()->status(null)->orderBy(['id' => SORT_ASC])->one();
         if (!$user) {
             $this->stderr("User not found\n", Console::FG_RED);
+            return null;
         }
+        // Craft's MCP tools act as the identity on the user component.
+        Craft::$app->getUser()->setIdentity($user);
 
         return $user;
     }

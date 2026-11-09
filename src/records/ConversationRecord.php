@@ -8,10 +8,12 @@ use cossette\projectassistant\migrations\Install;
 /**
  * @property int $id
  * @property int $userId
+ * @property string $mode client | developer
  * @property string $title
  * @property string|null $messages
  * @property string|null $transcript
  * @property string|null $pendingNote
+ * @property string|null $pendingTools
  * @property string|null $ticketDraft
  * @property string|null $ticketReference
  * @property string|null $ticketUrl
@@ -27,6 +29,14 @@ use cossette\projectassistant\migrations\Install;
  */
 class ConversationRecord extends ActiveRecord
 {
+    public const MODE_CLIENT = 'client';
+    public const MODE_DEVELOPER = 'developer';
+
+    public function isDeveloper(): bool
+    {
+        return $this->mode === self::MODE_DEVELOPER;
+    }
+
     public static function tableName(): string
     {
         return Install::CONVERSATIONS;

@@ -9,4 +9,7 @@ class RegisterToolsEvent extends Event
 {
     /** @var ToolInterface[] Add, replace or remove tools. Keep them read-only. */
     public array $tools = [];
+
+    /** `client` or `developer`: which chat the tools are for. */
+    public string $mode = 'client';
 }

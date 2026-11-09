@@ -4,6 +4,8 @@ namespace cossette\projectassistant\services;
 
 use cossette\projectassistant\events\RegisterToolsEvent;
 use cossette\projectassistant\Plugin;
+use cossette\projectassistant\records\ConversationRecord;
+use cossette\projectassistant\tools\CraftMcp;
 use cossette\projectassistant\tools\DescribeContentModelTool;
 use cossette\projectassistant\tools\ListFilesTool;
 use cossette\projectassistant\tools\ProposeTicketTool;
@@ -31,14 +33,18 @@ class Tools extends Component
 {
     public const EVENT_REGISTER_TOOLS = 'registerTools';
 
-    /** @var array<string, ToolInterface>|null */
-    private ?array $tools = null;
+    /** @var array<string, array<string, ToolInterface>> per mode */
+    private array $tools = [];
 
-    /** @return array<string, ToolInterface> */
-    public function getTools(): array
+    /**
+     * @param string $mode `client` (read-only + ticket drafts) or `developer`
+     *   (read-only + Craft's MCP tools, ticket drafts left out)
+     * @return array<string, ToolInterface>
+     */
+    public function getTools(string $mode = ConversationRecord::MODE_CLIENT): array
     {
-        if ($this->tools !== null) {
-            return $this->tools;
+        if (isset($this->tools[$mode])) {
+            return $this->tools[$mode];
         }
 
         $tools = [
@@ -51,31 +57,35 @@ class Tools extends Component
         if (Plugin::getInstance()->getSettings()->isSqlEnabled()) {
             $tools[] = new RunSqlTool();
         }
-        $tools[] = new ProposeTicketTool();
+        if ($mode === ConversationRecord::MODE_DEVELOPER) {
+            array_push($tools, ...CraftMcp::tools());
+        } else {
+            $tools[] = new ProposeTicketTool();
+        }
 
-        $event = new RegisterToolsEvent(['tools' => $tools]);
+        $event = new RegisterToolsEvent(['tools' => $tools, 'mode' => $mode]);
         $this->trigger(self::EVENT_REGISTER_TOOLS, $event);
 
-        $this->tools = [];
+        $this->tools[$mode] = [];
         foreach ($event->tools as $tool) {
             if ($tool instanceof ToolInterface) {
-                $this->tools[$tool->getName()] = $tool;
+                $this->tools[$mode][$tool->getName()] = $tool;
             }
         }
 
-        return $this->tools;
+        return $this->tools[$mode];
     }
 
-    public function getTool(string $name): ?ToolInterface
+    public function getTool(string $name, string $mode = ConversationRecord::MODE_CLIENT): ?ToolInterface
     {
-        return $this->getTools()[$name] ?? null;
+        return $this->getTools($mode)[$name] ?? null;
     }
 
     /** Tool definitions for the Messages API, in a stable order (keeps the prompt cache valid). */
-    public function getDefinitions(): array
+    public function getDefinitions(string $mode = ConversationRecord::MODE_CLIENT): array
     {
         $definitions = [];
-        foreach ($this->getTools() as $tool) {
+        foreach ($this->getTools($mode) as $tool) {
             $definitions[] = [
                 'name' => $tool->getName(),
                 'description' => $tool->getDescription(),
@@ -86,9 +96,9 @@ class Tools extends Component
         return $definitions;
     }
 
-    public function execute(string $name, array $input, ToolContext $context): ToolResult
+    public function execute(string $name, array $input, ToolContext $context, string $mode = ConversationRecord::MODE_CLIENT): ToolResult
     {
-        $tool = $this->getTool($name);
+        $tool = $this->getTool($name, $mode);
         if ($tool === null) {
             return ToolResult::error("Unknown tool: $name");
         }

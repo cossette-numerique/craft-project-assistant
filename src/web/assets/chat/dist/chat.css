@@ -668,3 +668,60 @@
   .pa-ticket .pa-ticket__row { grid-template-columns: 1fr; }
   .pa-msg--user .pa-msg__body { max-width: 95%; }
 }
+
+/* -- Developer chat ---------------------------------------------------------- */
+
+.pa-alert--developer {
+  background: #eef1ff;
+  border-color: #c9d2fb;
+}
+
+/* A tool call waiting for approval (and its outcome once decided). */
+.pa-approval {
+  border: 1px solid var(--hairline-color, #cdd8e4);
+  border-left: 4px solid #4a5bd4;
+  border-radius: 8px;
+  padding: 12px 14px;
+  background: var(--white, #fff);
+  font-size: 13px;
+}
+.pa-approval--destructive.pa-approval--pending { border-left-color: #c2410c; }
+.pa-approval--approved { border-left-color: var(--success-color, #0c7c48); }
+.pa-approval--failed { border-left-color: var(--error-color, #cf1124); }
+.pa-approval--rejected { border-left-color: var(--hairline-color, #cdd8e4); opacity: 0.85; }
+.pa-approval__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.pa-approval__title { font-weight: 600; font-size: 14px; }
+.pa-approval__tool {
+  font-size: 12px;
+  background: var(--gray-050, #f3f7fc);
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+.pa-approval__badge {
+  font-size: 11px;
+  border-radius: 8px;
+  padding: 1px 8px;
+  background: #fde8dc;
+  color: #9a3412;
+}
+.pa-approval__label { margin: 6px 0 0; color: var(--light-text-color, #606d7b); }
+.pa-approval details { margin-top: 8px; }
+.pa-approval summary { cursor: pointer; width: fit-content; color: var(--light-text-color, #606d7b); }
+.pa-approval pre {
+  margin: 6px 0 0;
+  max-height: 320px;
+  overflow: auto;
+  background: var(--gray-050, #f3f7fc);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.pa-approval__actions { display: flex; gap: 8px; margin-top: 10px; }

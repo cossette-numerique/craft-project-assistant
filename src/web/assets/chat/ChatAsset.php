@@ -46,6 +46,16 @@ class ChatAsset extends AssetBundle
         'Sending…',
         'You asked for a ticket',
         'The connection was interrupted. Reload the page to see the latest state.',
+        'Change waiting for approval',
+        'Changes existing data',
+        'Arguments',
+        'Result',
+        'Approve',
+        'Reject',
+        'Approved and run',
+        'Approved, but it failed',
+        'Rejected: not run',
+        'Waiting for your approval. Sending a new message instead rejects the pending changes.',
     ];
 
     public function init(): void

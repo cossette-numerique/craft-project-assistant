@@ -6,6 +6,7 @@ use craft\db\Query;
 use craft\helpers\Db;
 use cossette\projectassistant\migrations\Install;
 use cossette\projectassistant\Plugin;
+use cossette\projectassistant\records\ConversationRecord;
 use cossette\projectassistant\records\EventRecord;
 use DateTime;
 use yii\base\Component;
@@ -41,25 +42,46 @@ class Usage extends Component
         return new DateTime($now->format('Y-m-01 00:00:00'), $now->getTimezone());
     }
 
-    public function spentThisMonth(?int $userId = null): float
+    /**
+     * Estimated spend this month on the client's bill. When the developer chat
+     * has its own API key, its calls are billed separately and left out.
+     *
+     * @param string|null $mode `developer` to get only developer-chat spend
+     */
+    public function spentThisMonth(?int $userId = null, ?string $mode = null): float
     {
         $query = (new Query())
-            ->from(Install::EVENTS)
-            ->where(['type' => EventRecord::TYPE_API_CALL])
-            ->andWhere(['>=', 'dateCreated', Db::prepareDateForDb($this->monthStart())]);
+            ->from(['e' => Install::EVENTS])
+            ->leftJoin(['c' => Install::CONVERSATIONS], '[[c.id]] = [[e.conversationId]]')
+            ->where(['e.type' => EventRecord::TYPE_API_CALL])
+            ->andWhere(['>=', 'e.dateCreated', Db::prepareDateForDb($this->monthStart())]);
         if ($userId !== null) {
-            $query->andWhere(['userId' => $userId]);
+            $query->andWhere(['e.userId' => $userId]);
+        }
+        if ($mode === ConversationRecord::MODE_DEVELOPER) {
+            $query->andWhere(['c.mode' => ConversationRecord::MODE_DEVELOPER]);
+        } elseif ($this->developerBilledSeparately()) {
+            $query->andWhere(['or', ['c.mode' => null], ['not', ['c.mode' => ConversationRecord::MODE_DEVELOPER]]]);
         }
 
-        return (float)$query->sum('costUsd');
+        return (float)$query->sum('[[e.costUsd]]');
+    }
+
+    public function developerBilledSeparately(): bool
+    {
+        return (string)\craft\helpers\App::parseEnv(Plugin::getInstance()->getSettings()->developerApiKey) !== '';
     }
 
     /**
      * @return string|null why the user can't ask a question right now, or null if they can
      */
-    public function budgetBlock(int $userId): ?string
+    public function budgetBlock(int $userId, string $mode = ConversationRecord::MODE_CLIENT): ?string
     {
         $settings = Plugin::getInstance()->getSettings();
+        // The client's budgets protect the client's bill; a developer chat on its own key isn't on it.
+        if ($mode === ConversationRecord::MODE_DEVELOPER && $this->developerBilledSeparately()) {
+            return null;
+        }
         if ($settings->monthlyBudget > 0 && $this->spentThisMonth() >= $settings->monthlyBudget) {
             return \Craft::t(Plugin::HANDLE, 'The monthly budget for the assistant has been reached. It will be available again next month, or an administrator can raise the budget.');
         }

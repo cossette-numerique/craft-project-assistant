@@ -216,6 +216,67 @@
     }
   }
 
+  // -- Approvals (developer chat) ----------------------------------------------
+
+  const APPROVAL_STATES = {
+    approved: 'Approved and run',
+    failed: 'Approved, but it failed',
+    rejected: 'Rejected: not run',
+  };
+
+  function renderApproval(item) {
+    clearWelcome();
+    currentSteps = null;
+    const card = el('section', {
+      class: 'pa-approval pa-approval--' + (item.state || 'pending') + (item.destructive ? ' pa-approval--destructive' : ''),
+      'data-id': item.id,
+      'aria-label': t('Change waiting for approval'),
+    });
+    fillApproval(card, item);
+    messagesEl.appendChild(card);
+    return card;
+  }
+
+  function fillApproval(card, item) {
+    card.innerHTML = '';
+    const pending = (item.state || 'pending') === 'pending';
+    card.className = 'pa-approval pa-approval--' + (item.state || 'pending') + (item.destructive ? ' pa-approval--destructive' : '');
+    card.appendChild(el('header', { class: 'pa-approval__header' }, [
+      el('span', { class: 'pa-approval__title', text: pending ? t('Change waiting for approval') : t(APPROVAL_STATES[item.state] || item.state) }),
+      el('code', { class: 'pa-approval__tool', text: item.tool || item.name }),
+      item.destructive ? el('span', { class: 'pa-approval__badge', text: t('Changes existing data') }) : null,
+    ]));
+    if (item.label) {
+      card.appendChild(el('p', { class: 'pa-approval__label', text: item.label }));
+    }
+    const args = JSON.stringify(item.input || {}, null, 2);
+    card.appendChild(el('details', { class: 'pa-approval__args', open: pending ? true : null }, [
+      el('summary', { text: t('Arguments') }),
+      el('pre', {}, [el('code', { text: args })]),
+    ]));
+    if (item.result && !pending) {
+      card.appendChild(el('details', { class: 'pa-approval__result' }, [
+        el('summary', { text: t('Result') }),
+        el('pre', {}, [el('code', { text: item.result })]),
+      ]));
+    }
+    if (pending && !config.readOnly) {
+      const approve = el('button', { type: 'button', class: 'btn submit', text: t('Approve') });
+      const reject = el('button', { type: 'button', class: 'btn', text: t('Reject') });
+      approve.addEventListener('click', () => resolveApproval(item.id, 'approve'));
+      reject.addEventListener('click', () => resolveApproval(item.id, 'reject'));
+      card.appendChild(el('div', { class: 'pa-approval__actions' }, [approve, reject]));
+    }
+    card._item = item;
+  }
+
+  function updateApproval(id, changes) {
+    const card = messagesEl.querySelector('.pa-approval[data-id="' + CSS.escape(id) + '"]');
+    if (card && card._item) {
+      fillApproval(card, Object.assign({}, card._item, changes));
+    }
+  }
+
   function renderItem(item, index, items) {
     switch (item.type) {
       case 'user':
@@ -224,6 +285,8 @@
         return renderAssistant(item);
       case 'tool':
         return renderTool(item, false);
+      case 'approval':
+        return renderApproval(item);
       case 'ticket': {
         // Only the latest pending draft stays editable.
         const later = items.slice(index + 1).some((i) => i.type === 'ticket');
@@ -285,6 +348,12 @@
       case 'assistant':
         renderAssistant(data);
         break;
+      case 'approval':
+        renderApproval(data);
+        break;
+      case 'approval_resolved':
+        updateApproval(data.id, { state: data.state, result: data.result });
+        break;
       case 'ticket_draft':
         renderTicket({ state: 'draft', draft: data.draft }, true);
         break;
@@ -295,6 +364,9 @@
         renderNotice(data.message, 'error');
         break;
       case 'done':
+        if (data.awaitingApproval) {
+          renderNotice(t('Waiting for your approval. Sending a new message instead rejects the pending changes.'), 'info');
+        }
         if (data.questionCostUsd) {
           messagesEl.appendChild(el('div', { class: 'pa-cost light', text: t('This question cost about {cost}.', { cost: formatCost(data.questionCostUsd) }) }));
         }
@@ -308,10 +380,27 @@
     if (busy) return;
     renderUser({ text: message, requestTicket: requestTicket });
     if (input) input.value = '';
-    setBusy(true);
+    await streamRequest(config.sendUrl, {
+      message: message,
+      requestTicket: requestTicket,
+      conversationId: config.conversationId,
+      mode: config.mode,
+    });
+  }
 
+  /** Approve or reject a pending change, then stream the rest of the answer. */
+  async function resolveApproval(id, decision) {
+    if (busy) return;
+    const card = messagesEl.querySelector('.pa-approval[data-id="' + CSS.escape(id) + '"]');
+    if (card) card.querySelectorAll('button').forEach((b) => (b.disabled = true));
+    await streamRequest(config.resolveUrl, { conversationId: config.conversationId, toolUseId: id, decision: decision });
+  }
+
+  /** POSTs and reads the server-sent events of an assistant run. */
+  async function streamRequest(action, body) {
+    setBusy(true);
     try {
-      const response = await fetch(Craft.getActionUrl(config.sendUrl), {
+      const response = await fetch(Craft.getActionUrl(action), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -319,7 +408,7 @@
           'X-CSRF-Token': Craft.csrfTokenValue,
           'X-Requested-With': 'XMLHttpRequest',
         },
-        body: JSON.stringify({ message: message, requestTicket: requestTicket, conversationId: config.conversationId }),
+        body: JSON.stringify(body),
         credentials: 'same-origin',
       });
 
