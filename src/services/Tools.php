@@ -11,6 +11,7 @@ use cossette\projectassistant\tools\ListFilesTool;
 use cossette\projectassistant\tools\ProposeTicketTool;
 use cossette\projectassistant\tools\QueryEntriesTool;
 use cossette\projectassistant\tools\ReadFileTool;
+use cossette\projectassistant\tools\ReadLogsTool;
 use cossette\projectassistant\tools\RunSqlTool;
 use cossette\projectassistant\tools\SearchCodeTool;
 use cossette\projectassistant\tools\ToolContext;
@@ -58,6 +59,9 @@ class Tools extends Component
             $tools[] = new RunSqlTool();
         }
         if ($mode === ConversationRecord::MODE_DEVELOPER) {
+            if (Plugin::getInstance()->getSettings()->developerReadLogs) {
+                $tools[] = new ReadLogsTool();
+            }
             array_push($tools, ...CraftMcp::tools());
         } else {
             $tools[] = new ProposeTicketTool();

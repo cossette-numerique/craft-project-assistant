@@ -183,6 +183,7 @@ A second chat, **Assistant → Developer chat**, for the agency's developers. It
 'developerApiKey' => '$PROJECT_ASSISTANT_DEVELOPER_API_KEY', // optional: keep developer usage off the client's bill
 'developerModel' => 'claude-opus-5-5',                  // optional
 'developerInstructions' => '',                           // optional extra prompt for this chat
+'developerReadLogs' => true,                             // default: read_logs can read storage/logs
 ```
 
 **Tools:** the read tools above, plus Craft's own MCP tools (Craft 5.12+, offered to the model as `craft_*`). They're called in-process and act as the signed-in developer, so Craft checks that user's permissions on every call. You get every read-only Craft tool, and the write tools listed in `developerWriteTools`:
@@ -192,6 +193,8 @@ A second chat, **Assistant → Developer chat**, for the agency's developers. It
 - structure order
 
 Project config, plugins, user permissions and system settings are left out on purpose: structural changes keep going through project config YAML in git. The MCP server doesn't need to be enabled for the developer chat.
+
+**Logs:** the developer chat also gets `read_logs`, a read-only tool for Craft's log files in `storage/logs` (web, console, queue, phperrors, plugin and module logs) on the environment it runs on. Without a file it lists the logs, newest first. With a file it returns the last lines, or the last lines containing a search term, reading from the end of the file. Before the model sees a line, the values of secret-looking environment variables (`*KEY*`, `*SECRET*`, `*PASSWORD*`, `*TOKEN*`, `*DSN*`...) common credential patterns (bearer tokens, `password=...`, `"api_key": "..."`, `user:password@` in URLs) and, in the variable dumps Craft writes with errors, every `$_COOKIE` value plus any entry named like a session, identity, CSRF token or webhook are replaced with `[redacted]`. Redaction is pattern-based: it catches the usual suspects, not every possible secret. Set `developerReadLogs` to `false` to turn it off. The client chat never gets it, and the other file tools still can't read `storage/`.
 
 **Approvals:** when the model calls a tool that can change something, the run pauses. The chat shows the tool and its exact arguments, with **Approve** and **Reject** buttons:
 - **Approve** runs the call as you, then resumes the run.

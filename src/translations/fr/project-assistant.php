@@ -125,4 +125,6 @@ return [
     'Ask or request a change…' => 'Posez une question ou demandez une modification…',
     'This action is no longer waiting for approval.' => 'Cette action n’attend plus d’approbation.',
     'Craft: {tool}' => 'Craft : {tool}',
+    'Reading log {file}' => 'Lecture du journal {file}',
+    'Listing log files' => 'Liste des fichiers journaux',
 ];
